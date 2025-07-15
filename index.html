@@ -1,0 +1,550 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interior Mockup Studio</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --accent-color: #28a745;
+            --background-color: #f8f9fa;
+            --text-color: #333;
+            --sidebar-bg: #ffffff;
+            --card-bg: #ffffff;
+            --border-color: #dee2e6;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 10;
+            padding: 10px 20px;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        #main {
+            display: flex;
+            margin-top: 60px;
+            padding-bottom: 60px;
+        }
+        #sidebar {
+            width: 300px;
+            padding: 20px;
+            background-color: var(--sidebar-bg);
+            overflow-y: auto;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+        }
+        #canvas-container {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--background-color);
+        }
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--primary-color);
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+            z-index: 10;
+            padding: 10px 0;
+        }
+        #actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 18px;
+            color: var(--primary-color);
+        }
+        #backdrop-drop, #furniture-drop {
+            border: 2px dashed var(--border-color);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            background-color: var(--card-bg);
+            color: var(--text-color);
+        }
+        #backdrop-drop:hover, #furniture-drop:hover {
+            border-color: var(--primary-color);
+        }
+        #assets-library {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #assets-library img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+            border: 1px solid var(--border-color);
+            cursor: move;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button.active {
+            background-color: #0056b3;
+        }
+        #photo-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #photo-modal.show {
+            display: block;
+            opacity: 1;
+        }
+        #modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            width: 700px;
+            max-width: 90%;
+        }
+        #video {
+            width: 100%;
+            height: auto;
+            margin-bottom: 10px;
+        }
+        #modal-content div {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        @media (max-width: 768px) {
+            #main {
+                flex-direction: column;
+            }
+            #sidebar {
+                width: 100%;
+                max-height: 50vh;
+                overflow-y: auto;
+            }
+            #canvas-container {
+                width: 100%;
+            }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Interior Mockup Studio</h1>
+    </header>
+    <div id="main">
+        <div id="sidebar">
+            <div class="card">
+                <h3>Backdrop</h3>
+                <div id="backdrop-drop">📸 Drop backdrop image here or click to upload</div>
+                <button id="take-photo-btn">📷 Take Photo</button>
+                <button id="clear-backdrop">🗑️ Clear Backdrop</button>
+            </div>
+            <div class="card">
+                <h3>Assets Library</h3>
+                <div id="furniture-drop">🪑 Drop furniture images here or click to upload</div>
+                <div id="assets-library"></div>
+                <button id="clear-assets-btn">🗑️ Clear Assets</button>
+            </div>
+            <div class="card">
+                <h3>Drawing Tools</h3>
+                <button id="select-btn" class="active">🖱️ Select</button>
+                <button id="pencil-btn">✏️ Pencil</button>
+                <button id="eraser-btn">🧹 Eraser</button>
+                <button id="clear-drawings-btn">🗑️ Clear Drawings</button>
+            </div>
+        </div>
+        <div id="canvas-container">
+            <canvas id="canvas" width="800" height="600"></canvas>
+        </div>
+    </div>
+    <footer>
+        <div id="actions">
+            <button id="save-btn">💾 Save</button>
+            <button id="clear-all-btn">🗑️ Clear All</button>
+            <button id="undo-btn">↶ Undo</button>
+        </div>
+    </footer>
+    <div id="photo-modal">
+        <div id="modal-content">
+            <h2>Take Photo</h2>
+            <video id="video" width="640" height="480" autoplay></video>
+            <canvas id="photo-canvas" width="640" height="480" style="display:none;"></canvas>
+            <div>
+                <button id="capture-btn">📸 Capture</button>
+                <button id="close-modal">❌ Close</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const canvas = new fabric.Canvas('canvas');
+        const history = [];
+
+        function saveState() {
+            history.push(JSON.stringify(canvas.toJSON()));
+        }
+
+        function clearDrawings() {
+            const objects = canvas.getObjects('path');
+            objects.forEach(obj => canvas.remove(obj));
+            canvas.renderAll();
+            saveState();
+        }
+
+        function clearAssets() {
+            const objects = canvas.getObjects('image');
+            objects.forEach(obj => canvas.remove(obj));
+            canvas.renderAll();
+            saveState();
+        }
+
+        function updateCanvasDescription() {
+            const objects = canvas.getObjects();
+            const hasContent = objects.length > 0 || canvas.backgroundImage;
+            if (!hasContent) {
+                const text = new fabric.Text('Canvas Area - Drag and Drop Assets Here', {
+                    left: canvas.width / 2,
+                    top: canvas.height / 2,
+                    originX: 'center',
+                    originY: 'center',
+                    fill: 'rgba(0,0,0,0.3)',
+                    selectable: false
+                });
+                canvas.add(text);
+            } else {
+                const descriptionText = canvas.getObjects('text').find(obj => obj.text === 'Canvas Area - Drag and Drop Assets Here');
+                if (descriptionText) {
+                    canvas.remove(descriptionText);
+                }
+            }
+            canvas.renderAll();
+        }
+
+        document.getElementById('select-btn').addEventListener('click', function() {
+            canvas.isDrawingMode = false;
+            this.classList.add('active');
+            document.getElementById('pencil-btn').classList.remove('active');
+            document.getElementById('eraser-btn').classList.remove('active');
+        });
+
+        document.getElementById('pencil-btn').addEventListener('click', function() {
+            canvas.isDrawingMode = true;
+            canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+            canvas.freeDrawingBrush.width = 5;
+            canvas.freeDrawingBrush.color = 'black';
+            this.classList.add('active');
+            document.getElementById('select-btn').classList.remove('active');
+            document.getElementById('eraser-btn').classList.remove('active');
+        });
+
+        document.getElementById('eraser-btn').addEventListener('click', function() {
+            canvas.isDrawingMode = true;
+            canvas.freeDrawingBrush = new fabric.EraserBrush(canvas);
+            canvas.freeDrawingBrush.width = 10;
+            this.classList.add('active');
+            document.getElementById('select-btn').classList.remove('active');
+            document.getElementById('pencil-btn').classList.remove('active');
+        });
+
+        document.getElementById('clear-drawings-btn').addEventListener('click', clearDrawings);
+
+        document.getElementById('clear-assets-btn').addEventListener('click', clearAssets);
+
+        document.getElementById('save-btn').addEventListener('click', function() {
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = 'mockup.png';
+            link.click();
+        });
+
+        document.getElementById('clear-all-btn').addEventListener('click', function() {
+            canvas.clear();
+            updateCanvasDescription();
+            saveState();
+        });
+
+        document.getElementById('undo-btn').addEventListener('click', function() {
+            if (history.length > 0) {
+                const prevState = history.pop();
+                canvas.loadFromJSON(prevState, function() {
+                    canvas.renderAll();
+                    updateCanvasDescription();
+                });
+            }
+        });
+
+        const backdropDrop = document.getElementById('backdrop-drop');
+        backdropDrop.addEventListener('click', function() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = function(event) {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    fabric.Image.fromURL(e.target.result, function(img) {
+                        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+                            scaleX: canvas.width / img.width,
+                            scaleY: canvas.height / img.height
+                        });
+                        updateCanvasDescription();
+                        saveState();
+                    });
+                };
+                reader.readAsDataURL(file);
+            };
+            input.click();
+        });
+
+        backdropDrop.addEventListener('dragover', function(event) {
+            event.preventDefault();
+        });
+
+        backdropDrop.addEventListener('drop', function(event) {
+            event.preventDefault();
+            const file = event.dataTransfer.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                fabric.Image.fromURL(e.target.result, function(img) {
+                    canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+                        scaleX: canvas.width / img.width,
+                        scaleY: canvas.height / img.height
+                    });
+                    updateCanvasDescription();
+                    saveState();
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+
+        const furnitureDrop = document.getElementById('furniture-drop');
+        furnitureDrop.addEventListener('click', function() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.onchange = function(event) {
+                Array.from(event.target.files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.draggable = true;
+                        img.width = 100;
+                        img.addEventListener('dragstart', function(event) {
+                            event.dataTransfer.setData('text/plain', img.src);
+                        });
+                        document.getElementById('assets-library').appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            };
+            input.click();
+        });
+
+        furnitureDrop.addEventListener('dragover', function(event) {
+            event.preventDefault();
+        });
+
+        furnitureDrop.addEventListener('drop', function(event) {
+            event.preventDefault();
+            const files = event.dataTransfer.files;
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.draggable = true;
+                    img.width = 100;
+                    img.addEventListener('dragstart', function(event) {
+                        event.dataTransfer.setData('text/plain', img.src);
+                    });
+                    document.getElementById('assets-library').appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        canvas.wrapperEl.addEventListener('dragover', function(event) {
+            event.preventDefault();
+        });
+
+        canvas.wrapperEl.addEventListener('drop', function(event) {
+            event.preventDefault();
+            const imgSrc = event.dataTransfer.getData('text/plain');
+            fabric.Image.fromURL(imgSrc, function(img) {
+                img.set({
+                    left: event.layerX,
+                    top: event.layerY,
+                    scaleX: 0.5,
+                    scaleY: 0.5
+                });
+                canvas.add(img);
+                updateCanvasDescription();
+                saveState();
+            });
+        });
+
+        const video = document.getElementById('video');
+        const photoCanvas = document.getElementById('photo-canvas');
+        const photoCtx = photoCanvas.getContext('2d');
+
+        document.getElementById('take-photo-btn').addEventListener('click', function() {
+            document.getElementById('photo-modal').classList.add('show');
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    video.srcObject = stream;
+                })
+                .catch(function(err) {
+                    console.error('Error accessing camera: ', err);
+                });
+        });
+
+        document.getElementById('capture-btn').addEventListener('click', function() {
+            photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+            const dataURL = photoCanvas.toDataURL('image/png');
+            fabric.Image.fromURL(dataURL, function(img) {
+                canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+                    scaleX: canvas.width / img.width,
+                    scaleY: canvas.height / img.height
+                });
+                updateCanvasDescription();
+                saveState();
+            });
+            document.getElementById('photo-modal').classList.remove('show');
+            video.srcObject.getTracks().forEach(track => track.stop());
+        });
+
+        document.getElementById('close-modal').addEventListener('click', function() {
+            document.getElementById('photo-modal').classList.remove('show');
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        document.getElementById('clear-backdrop').addEventListener('click', function() {
+            canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
+            updateCanvasDescription();
+            saveState();
+        });
+
+        // Handle delete key for removing selected assets
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Delete' || event.key === 'Backspace') {
+                const activeObject = canvas.getActiveObject();
+                if (activeObject && activeObject.type === 'image') {
+                    canvas.remove(activeObject);
+                    canvas.renderAll();
+                    updateCanvasDescription();
+                    saveState();
+                }
+            }
+        });
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth - 40;
+            const height = width * 3 / 4;
+            const scale = width / 800;
+            canvas.setWidth(width);
+            canvas.setHeight(height);
+            canvas.setZoom(scale);
+            canvas.renderAll();
+            updateCanvasDescription();
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        updateCanvasDescription();
+    </script>
+</body>
+</html>
