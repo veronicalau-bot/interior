@@ -14,6 +14,9 @@
             --card-bg: #ffffff;
             --border-color: #dee2e6;
         }
+        html {
+            scroll-behavior: smooth;
+        }
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -83,6 +86,22 @@
             margin-bottom: 10px;
             font-size: 18px;
             color: var(--primary-color);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card h3 .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+        .card.active h3 .toggle-icon {
+            transform: rotate(-180deg);
+        }
+        .card .card-content {
+            display: none;
+        }
+        .card.active .card-content {
+            display: block;
         }
         #backdrop-drop, #furniture-drop {
             border: 2px dashed var(--border-color);
@@ -204,6 +223,9 @@
             padding: 3px 6px;
             margin-left: 4px;
         }
+        #scroll-to-tools-btn {
+            display: none;
+        }
         @media (max-width: 768px) {
             header {
                 padding: 5px 10px;
@@ -218,8 +240,8 @@
             }
             #sidebar {
                 width: 100%;
-                max-height: 40vh;
-                overflow-y: auto;
+                max-height: none; /* Allow sidebar to grow */
+                overflow-y: visible;
                 box-shadow: none;
                 padding: 10px;
             }
@@ -232,6 +254,19 @@
             footer {
                 padding: 5px 0;
             }
+            #scroll-to-tools-btn {
+                display: block;
+                position: fixed;
+                bottom: 65px; /* Above the footer */
+                right: 15px;
+                z-index: 999;
+                border-radius: 50%;
+                width: 50px;
+                height: 50px;
+                font-size: 24px;
+                padding: 0;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            }
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
@@ -242,40 +277,48 @@
     </header>
     <div id="main">
         <div id="sidebar">
-            <div class="card">
-                <h3>Backdrop</h3>
-                <div id="backdrop-drop">📸 Drop backdrop image here or click to upload</div>
-                <button id="take-photo-btn">📷 Take Photo</button>
-                <button id="clear-backdrop">🗑️ Clear Backdrop</button>
+            <div class="card active">
+                <h3>Backdrop <span class="toggle-icon">▼</span></h3>
+                <div class="card-content">
+                    <div id="backdrop-drop">📸 Drop backdrop image here or click to upload</div>
+                    <button id="take-photo-btn">📷 Take Photo</button>
+                    <button id="clear-backdrop">🗑️ Clear Backdrop</button>
+                </div>
             </div>
             <div class="card">
-                <h3>Assets Library</h3>
-                <div id="furniture-drop">🪑 Drop furniture images here or click to upload</div>
-                <div id="assets-library"></div>
-                <button id="clear-assets-btn">🗑️ Clear Assets</button>
+                <h3>Assets Library <span class="toggle-icon">▼</span></h3>
+                <div class="card-content">
+                    <div id="furniture-drop">🪑 Drop furniture images here or click to upload</div>
+                    <div id="assets-library"></div>
+                    <button id="clear-assets-btn">🗑️ Clear Assets</button>
+                </div>
             </div>
              <div class="card">
-                <h3>Layers</h3>
-                <ol id="layers-panel"></ol>
+                <h3>Layers <span class="toggle-icon">▼</span></h3>
+                <div class="card-content">
+                    <ol id="layers-panel"></ol>
+                </div>
             </div>
             <div class="card">
-                <h3>Drawing Tools</h3>
-                <button id="select-btn" class="active">🖱️ Select</button>
-                <button id="pencil-btn">✏️ Pencil</button>
-                <div class="color-palette">
-                    <span class="color-swatch active" style="background-color: black;" data-color="black"></span>
-                    <span class="color-swatch" style="background-color: red;" data-color="red"></span>
-                    <span class="color-swatch" style="background-color: blue;" data-color="blue"></span>
-                    <span class="color-swatch" style="background-color: green;" data-color="green"></span>
-                    <span class="color-swatch" style="background-color: yellow;" data-color="yellow"></span>
-                    <span class="color-swatch" style="background-color: white;" data-color="white"></span>
+                <h3>Drawing Tools <span class="toggle-icon">▼</span></h3>
+                <div class="card-content">
+                    <button id="select-btn" class="active">🖱️ Select</button>
+                    <button id="pencil-btn">✏️ Pencil</button>
+                    <div class="color-palette">
+                        <span class="color-swatch active" style="background-color: black;" data-color="black"></span>
+                        <span class="color-swatch" style="background-color: red;" data-color="red"></span>
+                        <span class="color-swatch" style="background-color: blue;" data-color="blue"></span>
+                        <span class="color-swatch" style="background-color: green;" data-color="green"></span>
+                        <span class="color-swatch" style="background-color: yellow;" data-color="yellow"></span>
+                        <span class="color-swatch" style="background-color: white;" data-color="white"></span>
+                    </div>
+                    <button id="eraser-btn">🧹 Eraser</button>
+                    <button id="clear-drawings-btn">🗑️ Clear Drawings</button>
                 </div>
-                <button id="eraser-btn">🧹 Eraser</button>
-                <button id="clear-drawings-btn">🗑️ Clear Drawings</button>
             </div>
         </div>
         <div id="canvas-container">
-            <canvas id="canvas" width="800" height="600"></canvas>
+            <canvas id="canvas"></canvas>
         </div>
     </div>
     <footer>
@@ -285,6 +328,7 @@
             <button id="undo-btn">↶ Undo</button>
         </div>
     </footer>
+    <button id="scroll-to-tools-btn">▼</button>
     <div id="photo-modal">
         <div id="modal-content">
             <h2>Take Photo</h2>
@@ -311,14 +355,12 @@
             const objects = canvas.getObjects('path');
             objects.forEach(obj => canvas.remove(obj));
             canvas.renderAll();
-            saveState();
         }
 
         function clearAssets() {
             const objects = canvas.getObjects('image');
             objects.forEach(obj => canvas.remove(obj));
             canvas.renderAll();
-            saveState();
         }
 
         function updateCanvasDescription() {
@@ -334,7 +376,7 @@
                     originY: 'center',
                     fill: 'rgba(0,0,0,0.3)',
                     selectable: false,
-                    evented: false, // Make it non-interactive
+                    evented: false,
                 });
                 canvas.add(text);
             } else if (hasContent && descriptionText) {
@@ -346,11 +388,11 @@
         function updateLayers() {
             const layersPanel = document.getElementById('layers-panel');
             layersPanel.innerHTML = '';
-            const objects = canvas.getObjects().slice().reverse(); // Get a reversed copy to show top layer first
+            const objects = canvas.getObjects().slice().reverse(); 
             const activeObject = canvas.getActiveObject();
 
             objects.forEach((obj, index) => {
-                if (obj.text === 'Canvas Area - Drag and Drop Assets Here') return; // Skip placeholder text
+                if (obj.text === 'Canvas Area - Drag and Drop Assets Here') return;
 
                 const li = document.createElement('li');
                 li.className = 'layer-item';
@@ -372,27 +414,15 @@
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = '🗑️';
-                deleteBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    canvas.remove(obj);
-                    saveState();
-                };
+                deleteBtn.onclick = (e) => { e.stopPropagation(); canvas.remove(obj); };
 
                 const upBtn = document.createElement('button');
                 upBtn.textContent = '↑';
-                upBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    canvas.bringForward(obj);
-                    saveState();
-                };
+                upBtn.onclick = (e) => { e.stopPropagation(); canvas.bringForward(obj); };
 
                 const downBtn = document.createElement('button');
                 downBtn.textContent = '↓';
-                downBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    canvas.sendBackwards(obj);
-                    saveState();
-                };
+                downBtn.onclick = (e) => { e.stopPropagation(); canvas.sendBackwards(obj); };
 
                 controls.appendChild(upBtn);
                 controls.appendChild(downBtn);
@@ -469,9 +499,9 @@
         });
 
         document.getElementById('undo-btn').addEventListener('click', function() {
-            if (history.length > 1) { // Need at least one state to revert to
-                history.pop(); // Remove current state
-                const prevState = history[history.length - 1]; // Get previous state
+            if (history.length > 1) {
+                history.pop();
+                const prevState = history[history.length - 1];
                 canvas.loadFromJSON(prevState, function() {
                     canvas.renderAll();
                     updateCanvasDescription();
@@ -495,7 +525,6 @@
                             scaleY: canvas.height / img.height
                         });
                         updateCanvasDescription();
-                        saveState();
                     });
                 };
                 reader.readAsDataURL(file);
@@ -503,10 +532,7 @@
             input.click();
         });
 
-        backdropDrop.addEventListener('dragover', function(event) {
-            event.preventDefault();
-        });
-
+        backdropDrop.addEventListener('dragover', (e) => e.preventDefault());
         backdropDrop.addEventListener('drop', function(event) {
             event.preventDefault();
             const file = event.dataTransfer.files[0];
@@ -518,7 +544,6 @@
                         scaleY: canvas.height / img.height
                     });
                     updateCanvasDescription();
-                    saveState();
                 });
             };
             reader.readAsDataURL(file);
@@ -538,9 +563,7 @@
                         img.src = e.target.result;
                         img.draggable = true;
                         img.width = 100;
-                        img.addEventListener('dragstart', function(event) {
-                            event.dataTransfer.setData('text/plain', img.src);
-                        });
+                        img.addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain', img.src));
                         document.getElementById('assets-library').appendChild(img);
                     };
                     reader.readAsDataURL(file);
@@ -549,46 +572,31 @@
             input.click();
         });
 
-        furnitureDrop.addEventListener('dragover', function(event) {
-            event.preventDefault();
-        });
-
+        furnitureDrop.addEventListener('dragover', (e) => e.preventDefault());
         furnitureDrop.addEventListener('drop', function(event) {
             event.preventDefault();
-            const files = event.dataTransfer.files;
-            Array.from(files).forEach(file => {
+            Array.from(event.dataTransfer.files).forEach(file => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const img = document.createElement('img');
                     img.src = e.target.result;
                     img.draggable = true;
                     img.width = 100;
-                    img.addEventListener('dragstart', function(event) {
-                        event.dataTransfer.setData('text/plain', img.src);
-                    });
+                    img.addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain', img.src));
                     document.getElementById('assets-library').appendChild(img);
                 };
                 reader.readAsDataURL(file);
             });
         });
 
-        canvas.wrapperEl.addEventListener('dragover', function(event) {
-            event.preventDefault();
-        });
-
+        canvas.wrapperEl.addEventListener('dragover', (e) => e.preventDefault());
         canvas.wrapperEl.addEventListener('drop', function(event) {
             event.preventDefault();
-            updateCanvasDescription(); // Remove placeholder text
+            updateCanvasDescription();
             const imgSrc = event.dataTransfer.getData('text/plain');
             fabric.Image.fromURL(imgSrc, function(img) {
-                img.set({
-                    left: event.layerX,
-                    top: event.layerY,
-                    scaleX: 0.5,
-                    scaleY: 0.5
-                });
+                img.set({ left: event.layerX, top: event.layerY, scaleX: 0.5, scaleY: 0.5 });
                 canvas.add(img);
-                // saveState is called by the 'object:added' event
             });
         });
 
@@ -599,18 +607,12 @@
         document.getElementById('take-photo-btn').addEventListener('click', function() {
             document.getElementById('photo-modal').classList.add('show');
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                .then(function(stream) {
-                    video.srcObject = stream;
-                })
-                .catch(function(err) {
+                .then((stream) => { video.srcObject = stream; })
+                .catch((err) => {
                     console.error('Error accessing rear camera, trying front camera: ', err);
                     navigator.mediaDevices.getUserMedia({ video: true })
-                        .then(function(stream) {
-                            video.srcObject = stream;
-                        })
-                        .catch(function(fallbackErr) {
-                            console.error('Error accessing any camera: ', fallbackErr);
-                        });
+                        .then((stream) => { video.srcObject = stream; })
+                        .catch((fallbackErr) => console.error('Error accessing any camera: ', fallbackErr));
                 });
         });
 
@@ -623,7 +625,6 @@
                     scaleY: canvas.height / img.height
                 });
                 updateCanvasDescription();
-                saveState();
             });
             document.getElementById('photo-modal').classList.remove('show');
             video.srcObject.getTracks().forEach(track => track.stop());
@@ -631,30 +632,23 @@
 
         document.getElementById('close-modal').addEventListener('click', function() {
             document.getElementById('photo-modal').classList.remove('show');
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-            }
+            if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
         });
 
-        document.getElementById('clear-backdrop').addEventListener('click', function() {
+        document.getElementById('clear-backdrop').addEventListener('click', () => {
             canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
-            updateCanvasDescription();
-            saveState();
         });
 
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Delete' || event.key === 'Backspace') {
                 const activeObject = canvas.getActiveObject();
                 if (activeObject) {
-                    // Check if multiple objects are selected
                     if (activeObject.type === 'activeSelection') {
                         activeObject.forEachObject(obj => canvas.remove(obj));
                     } else {
                         canvas.remove(activeObject);
                     }
-                    canvas.discardActiveObject();
-                    canvas.renderAll();
-                    saveState();
+                    canvas.discardActiveObject().renderAll();
                 }
             }
         });
@@ -664,19 +658,48 @@
             const width = container.clientWidth - (window.innerWidth <= 768 ? 20 : 40);
             const height = container.clientHeight - (window.innerWidth <= 768 ? 20 : 40);
             
-            canvas.setWidth(width);
-            canvas.setHeight(height);
-            canvas.renderAll();
+            canvas.setWidth(width).setHeight(height).renderAll();
             updateCanvasDescription();
         }
 
         window.addEventListener('resize', resizeCanvas);
+
+        // Accordion Logic
+        document.querySelectorAll('.card h3').forEach(header => {
+            header.addEventListener('click', () => {
+                const card = header.parentElement;
+                const wasActive = card.classList.contains('active');
+                
+                // Close all cards
+                document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
+                
+                // If the clicked card wasn't the active one, open it
+                if (!wasActive) {
+                    card.classList.add('active');
+                }
+            });
+        });
+
+        // Scroll-to-Tools Logic
+        const scrollToBtn = document.getElementById('scroll-to-tools-btn');
+        const sidebar = document.getElementById('sidebar');
+        const canvasContainer = document.getElementById('canvas-container');
+        scrollToBtn.addEventListener('click', () => {
+            // Check if we are at the top
+            if (window.scrollY < 10) {
+                sidebar.scrollIntoView();
+                scrollToBtn.innerHTML = '▲';
+            } else {
+                canvasContainer.scrollIntoView();
+                scrollToBtn.innerHTML = '▼';
+            }
+        });
         
         // Initial setup
         setTimeout(() => {
             resizeCanvas();
             updateCanvasDescription();
-            saveState(); // Save the initial empty state
+            saveState();
         }, 100);
 
     </script>
