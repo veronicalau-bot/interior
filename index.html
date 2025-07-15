@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -93,6 +54,7 @@
             justify-content: center;
             align-items: center;
             background-color: var(--background-color);
+            min-height: calc(100vh - 120px);
         }
         footer {
             position: fixed;
@@ -200,17 +162,75 @@
             justify-content: center;
             gap: 10px;
         }
+        .color-palette {
+            margin-top: 10px;
+            display: flex;
+            gap: 5px;
+        }
+        .color-swatch {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .color-swatch.active {
+            border-color: #000;
+        }
+        #layers-panel {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .layer-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin-bottom: 5px;
+            background-color: #f1f1f1;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .layer-item.active {
+            background-color: var(--accent-color);
+            color: white;
+        }
+        .layer-item span {
+            flex-grow: 1;
+        }
+        .layer-controls button {
+            padding: 3px 6px;
+            margin-left: 4px;
+        }
         @media (max-width: 768px) {
+            header {
+                padding: 5px 10px;
+            }
+            header h1 {
+                font-size: 20px;
+            }
             #main {
-                flex-direction: column;
+                flex-direction: column-reverse;
+                margin-top: 50px;
+                margin-bottom: 50px;
             }
             #sidebar {
                 width: 100%;
-                max-height: 50vh;
+                max-height: 40vh;
                 overflow-y: auto;
+                box-shadow: none;
+                padding: 10px;
             }
             #canvas-container {
                 width: 100%;
+                height: 60vh;
+                padding: 10px;
+                box-sizing: border-box;
+            }
+            footer {
+                padding: 5px 0;
             }
         }
     </style>
@@ -234,10 +254,22 @@
                 <div id="assets-library"></div>
                 <button id="clear-assets-btn">🗑️ Clear Assets</button>
             </div>
+             <div class="card">
+                <h3>Layers</h3>
+                <ol id="layers-panel"></ol>
+            </div>
             <div class="card">
                 <h3>Drawing Tools</h3>
                 <button id="select-btn" class="active">🖱️ Select</button>
                 <button id="pencil-btn">✏️ Pencil</button>
+                <div class="color-palette">
+                    <span class="color-swatch active" style="background-color: black;" data-color="black"></span>
+                    <span class="color-swatch" style="background-color: red;" data-color="red"></span>
+                    <span class="color-swatch" style="background-color: blue;" data-color="blue"></span>
+                    <span class="color-swatch" style="background-color: green;" data-color="green"></span>
+                    <span class="color-swatch" style="background-color: yellow;" data-color="yellow"></span>
+                    <span class="color-swatch" style="background-color: white;" data-color="white"></span>
+                </div>
                 <button id="eraser-btn">🧹 Eraser</button>
                 <button id="clear-drawings-btn">🗑️ Clear Drawings</button>
             </div>
@@ -265,11 +297,14 @@
         </div>
     </div>
     <script>
-        const canvas = new fabric.Canvas('canvas');
+        const canvas = new fabric.Canvas('canvas', {
+            preserveObjectStacking: true
+        });
         const history = [];
 
         function saveState() {
             history.push(JSON.stringify(canvas.toJSON()));
+            updateLayers();
         }
 
         function clearDrawings() {
@@ -289,24 +324,93 @@
         function updateCanvasDescription() {
             const objects = canvas.getObjects();
             const hasContent = objects.length > 0 || canvas.backgroundImage;
-            if (!hasContent) {
+            const descriptionText = canvas.getObjects('text').find(obj => obj.text === 'Canvas Area - Drag and Drop Assets Here');
+            
+            if (!hasContent && !descriptionText) {
                 const text = new fabric.Text('Canvas Area - Drag and Drop Assets Here', {
                     left: canvas.width / 2,
                     top: canvas.height / 2,
                     originX: 'center',
                     originY: 'center',
                     fill: 'rgba(0,0,0,0.3)',
-                    selectable: false
+                    selectable: false,
+                    evented: false, // Make it non-interactive
                 });
                 canvas.add(text);
-            } else {
-                const descriptionText = canvas.getObjects('text').find(obj => obj.text === 'Canvas Area - Drag and Drop Assets Here');
-                if (descriptionText) {
-                    canvas.remove(descriptionText);
-                }
+            } else if (hasContent && descriptionText) {
+                canvas.remove(descriptionText);
             }
             canvas.renderAll();
         }
+
+        function updateLayers() {
+            const layersPanel = document.getElementById('layers-panel');
+            layersPanel.innerHTML = '';
+            const objects = canvas.getObjects().slice().reverse(); // Get a reversed copy to show top layer first
+            const activeObject = canvas.getActiveObject();
+
+            objects.forEach((obj, index) => {
+                if (obj.text === 'Canvas Area - Drag and Drop Assets Here') return; // Skip placeholder text
+
+                const li = document.createElement('li');
+                li.className = 'layer-item';
+                if (obj === activeObject) {
+                    li.classList.add('active');
+                }
+
+                const name = document.createElement('span');
+                name.textContent = `${obj.type} #${objects.length - index}`;
+                li.appendChild(name);
+
+                li.addEventListener('click', () => {
+                    canvas.setActiveObject(obj);
+                    canvas.renderAll();
+                });
+
+                const controls = document.createElement('div');
+                controls.className = 'layer-controls';
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '🗑️';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    canvas.remove(obj);
+                    saveState();
+                };
+
+                const upBtn = document.createElement('button');
+                upBtn.textContent = '↑';
+                upBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    canvas.bringForward(obj);
+                    saveState();
+                };
+
+                const downBtn = document.createElement('button');
+                downBtn.textContent = '↓';
+                downBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    canvas.sendBackwards(obj);
+                    saveState();
+                };
+
+                controls.appendChild(upBtn);
+                controls.appendChild(downBtn);
+                controls.appendChild(deleteBtn);
+                li.appendChild(controls);
+                layersPanel.appendChild(li);
+            });
+        }
+
+
+        canvas.on({
+            'object:added': saveState,
+            'object:removed': saveState,
+            'object:modified': saveState,
+            'selection:created': updateLayers,
+            'selection:updated': updateLayers,
+            'selection:cleared': updateLayers,
+        });
 
         document.getElementById('select-btn').addEventListener('click', function() {
             canvas.isDrawingMode = false;
@@ -319,10 +423,21 @@
             canvas.isDrawingMode = true;
             canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
             canvas.freeDrawingBrush.width = 5;
-            canvas.freeDrawingBrush.color = 'black';
+            const activeColor = document.querySelector('.color-swatch.active').dataset.color;
+            canvas.freeDrawingBrush.color = activeColor;
             this.classList.add('active');
             document.getElementById('select-btn').classList.remove('active');
             document.getElementById('eraser-btn').classList.remove('active');
+        });
+        
+        document.querySelectorAll('.color-swatch').forEach(swatch => {
+            swatch.addEventListener('click', function() {
+                document.querySelector('.color-swatch.active').classList.remove('active');
+                this.classList.add('active');
+                if (canvas.isDrawingMode && canvas.freeDrawingBrush.color !== undefined) {
+                    canvas.freeDrawingBrush.color = this.dataset.color;
+                }
+            });
         });
 
         document.getElementById('eraser-btn').addEventListener('click', function() {
@@ -348,16 +463,19 @@
 
         document.getElementById('clear-all-btn').addEventListener('click', function() {
             canvas.clear();
+            canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
             updateCanvasDescription();
             saveState();
         });
 
         document.getElementById('undo-btn').addEventListener('click', function() {
-            if (history.length > 0) {
-                const prevState = history.pop();
+            if (history.length > 1) { // Need at least one state to revert to
+                history.pop(); // Remove current state
+                const prevState = history[history.length - 1]; // Get previous state
                 canvas.loadFromJSON(prevState, function() {
                     canvas.renderAll();
                     updateCanvasDescription();
+                    updateLayers();
                 });
             }
         });
@@ -460,6 +578,7 @@
 
         canvas.wrapperEl.addEventListener('drop', function(event) {
             event.preventDefault();
+            updateCanvasDescription(); // Remove placeholder text
             const imgSrc = event.dataTransfer.getData('text/plain');
             fabric.Image.fromURL(imgSrc, function(img) {
                 img.set({
@@ -469,8 +588,7 @@
                     scaleY: 0.5
                 });
                 canvas.add(img);
-                updateCanvasDescription();
-                saveState();
+                // saveState is called by the 'object:added' event
             });
         });
 
@@ -480,12 +598,19 @@
 
         document.getElementById('take-photo-btn').addEventListener('click', function() {
             document.getElementById('photo-modal').classList.add('show');
-            navigator.mediaDevices.getUserMedia({ video: true })
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(function(stream) {
                     video.srcObject = stream;
                 })
                 .catch(function(err) {
-                    console.error('Error accessing camera: ', err);
+                    console.error('Error accessing rear camera, trying front camera: ', err);
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                        .then(function(stream) {
+                            video.srcObject = stream;
+                        })
+                        .catch(function(fallbackErr) {
+                            console.error('Error accessing any camera: ', fallbackErr);
+                        });
                 });
         });
 
@@ -517,14 +642,18 @@
             saveState();
         });
 
-        // Handle delete key for removing selected assets
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Delete' || event.key === 'Backspace') {
                 const activeObject = canvas.getActiveObject();
-                if (activeObject && activeObject.type === 'image') {
-                    canvas.remove(activeObject);
+                if (activeObject) {
+                    // Check if multiple objects are selected
+                    if (activeObject.type === 'activeSelection') {
+                        activeObject.forEachObject(obj => canvas.remove(obj));
+                    } else {
+                        canvas.remove(activeObject);
+                    }
+                    canvas.discardActiveObject();
                     canvas.renderAll();
-                    updateCanvasDescription();
                     saveState();
                 }
             }
@@ -532,19 +661,24 @@
 
         function resizeCanvas() {
             const container = document.getElementById('canvas-container');
-            const width = container.clientWidth - 40;
-            const height = width * 3 / 4;
-            const scale = width / 800;
+            const width = container.clientWidth - (window.innerWidth <= 768 ? 20 : 40);
+            const height = container.clientHeight - (window.innerWidth <= 768 ? 20 : 40);
+            
             canvas.setWidth(width);
             canvas.setHeight(height);
-            canvas.setZoom(scale);
             canvas.renderAll();
             updateCanvasDescription();
         }
 
-        resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
-        updateCanvasDescription();
+        
+        // Initial setup
+        setTimeout(() => {
+            resizeCanvas();
+            updateCanvasDescription();
+            saveState(); // Save the initial empty state
+        }, 100);
+
     </script>
 </body>
 </html>
